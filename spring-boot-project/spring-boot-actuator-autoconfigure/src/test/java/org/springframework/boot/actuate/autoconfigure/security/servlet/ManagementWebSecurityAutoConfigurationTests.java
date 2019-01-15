@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import org.springframework.boot.actuate.autoconfigure.health.HealthEndpointAutoC
 import org.springframework.boot.actuate.autoconfigure.health.HealthIndicatorAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.info.InfoEndpointAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -104,6 +105,17 @@ public class ManagementWebSecurityAutoConfigurationTests {
 					status = getResponseStatus(context, "/foo");
 					assertThat(status).isEqualTo(HttpStatus.OK);
 				});
+	}
+
+	@Test
+	public void backOffIfOAuth2ResourceServerAutoConfigurationPresent() {
+		this.contextRunner
+				.withConfiguration(AutoConfigurations
+						.of(OAuth2ResourceServerAutoConfiguration.class))
+				.withPropertyValues(
+						"spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://authserver")
+				.run((context) -> assertThat(context)
+						.doesNotHaveBean(ManagementWebSecurityConfigurerAdapter.class));
 	}
 
 	private HttpStatus getResponseStatus(AssertableWebApplicationContext context,

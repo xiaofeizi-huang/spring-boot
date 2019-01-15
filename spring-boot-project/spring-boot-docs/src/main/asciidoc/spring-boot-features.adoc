@@ -3841,7 +3841,8 @@ Spring Data JPA repositories support three different modes of bootstrapping: def
 deferred, and lazy. To enable deferred or lazy bootstrapping, set the
 `spring.data.jpa.repositories.bootstrap-mode` to `deferred` or `lazy` respectively. When
 using deferred or lazy bootstrapping, the auto-configured `EntityManagerFactoryBuilder`
-will use the context's async task executor, if any, as the bootstrap executor.
+will use the context's `AsyncTaskExecutor`, if any, as the bootstrap executor. If more
+than one exists, the one named `applicationTaskExecutor` will be used.
 
 TIP: We have barely scratched the surface of Spring Data JPA. For complete details, see
 the https://docs.spring.io/spring-data/jpa/docs/current/reference/html/[Spring Data JPA
@@ -4292,7 +4293,8 @@ If you have SLF4J on the classpath, the output produced by Mongo is automaticall
 to a logger named `org.springframework.boot.autoconfigure.mongo.embedded.EmbeddedMongo`.
 
 You can declare your own `IMongodConfig` and `IRuntimeConfig` beans to take control of
-the Mongo instance's configuration and logging routing.
+the Mongo instance's configuration and logging routing. The download configuration can be
+customized by declaring a `DownloadConfigBuilderCustomizer` bean.
 
 
 
@@ -6360,10 +6362,23 @@ in a similar manner, as shown in the following example:
 
 [[boot-features-task-execution-scheduling]]
 == Task Execution and Scheduling
-In the absence of a `TaskExecutor` bean in the context, Spring Boot auto-configures a
+In the absence of an `Executor` bean in the context, Spring Boot auto-configures a
 `ThreadPoolTaskExecutor` with sensible defaults that can be automatically associated to
 asynchronous task execution (`@EnableAsync`) and Spring MVC asynchronous request
 processing.
+
+[TIP]
+====
+If you have defined a custom `Executor` in the context, regular task execution (i.e.
+`@EnableAsync`) will use it transparently but the Spring MVC support will not be
+configured as it requires an `AsyncTaskExecutor` implementation (named
+`applicationTaskExecutor`). Depending on your target arrangement, you could change your
+`Executor` into a `ThreadPoolTaskExecutor` or define both a `ThreadPoolTaskExecutor` and
+an `AsyncConfigurer` wrapping your custom `Executor`.
+
+The auto-configured `TaskExecutorBuilder` allows you to easily create instances that
+reproduces what the auto-configuration does by default.
+====
 
 The thread pool uses 8 core threads that can grow and shrink according to the load. Those
 default settings can be fine-tuned using the `spring.task.execution` namespace as shown in
@@ -8048,12 +8063,41 @@ annotations include:
 
 [[boot-features-class-conditions]]
 ==== Class Conditions
-The `@ConditionalOnClass` and `@ConditionalOnMissingClass` annotations let configuration
-be included based on the presence or absence of specific classes. Due to the fact that
-annotation metadata is parsed by using http://asm.ow2.org/[ASM], you can use the `value`
-attribute to refer to the real class, even though that class might not actually appear on
-the running application classpath. You can also use the `name` attribute if you prefer to
-specify the class name by using a `String` value.
+The `@ConditionalOnClass` and `@ConditionalOnMissingClass` annotations let
+`@Configuration` classes be included based on the presence or absence of specific classes.
+Due to the fact that annotation metadata is parsed by using http://asm.ow2.org/[ASM], you
+can use the `value` attribute to refer to the real class, even though that class might not
+actually appear on the running application classpath. You can also use the `name`
+attribute if you prefer to specify the class name by using a `String` value.
+
+This mechanism does not apply the same way to `@Bean` methods where typically the return
+type is the target of the condition: before the condition on the method applies, the JVM
+will have loaded the class and potentially processed method references which will fail if
+the class is not present.
+
+To handle this scenario, a separate `@Configuration` class can be used to isolate the
+condition, as shown in the following example:
+
+[source,java,indent=0]
+----
+	@Configuration
+	// Some conditions
+	public class MyAutoConfiguration {
+
+		// Auto-configured beans
+
+		@Configuration
+		@ConditionalOnClass(EmbeddedAcmeService.class)
+		static class EmbeddedConfiguration {
+
+			@Bean
+			@ConditionalOnMissingBean
+			public EmbeddedAcmeService embeddedAcmeService() { ... }
+
+		}
+
+	}
+----
 
 [TIP]
 ====
